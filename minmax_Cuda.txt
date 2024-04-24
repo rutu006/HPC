@@ -1,0 +1,330 @@
+!pip install git+https://github.com/afnan47/cuda.git
+# Load nvcc plugin
+%load_ext nvcc_plugin 
+
+%%writefile sum.cu
+#include <iostream>
+#include <vector>
+#include <climits>
+
+__global__ void min_reduction_kernel(int* arr, int size, int* result) {
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid < size) {
+        atomicMin(result, arr[tid]);
+    }
+}
+
+__global__ void max_reduction_kernel(int* arr, int size, int* result) {
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid < size) {
+        atomicMax(result, arr[tid]);
+    }
+}
+
+__global__ void sum_reduction_kernel(int* arr, int size, int* result) {
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid < size) {
+        atomicAdd(result, arr[tid]);
+    }
+}
+
+__global__ void average_reduction_kernel(int* arr, int size, int* sum) {
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid < size) {
+        atomicAdd(sum, arr[tid]);
+    }
+}
+
+int main() {
+    int size;
+    std::cout << "Enter the size of the array: ";
+    std::cin >> size;
+
+    std::vector<int> arr(size);
+    std::cout << "Enter the elements of the array:\n";
+    for (int i = 0; i < size; ++i) {
+        std::cout << "Element " << i + 1 << ": ";
+        std::cin >> arr[i];
+    }
+
+    int* d_arr;
+    int* d_result;
+    int result_min = INT_MAX;
+    int result_max = INT_MIN;
+    int result_sum = 0;
+
+    cudaMalloc(&d_arr, size * sizeof(int));
+    cudaMalloc(&d_result, sizeof(int));
+
+    cudaMemcpy(d_arr, arr.data(), size * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_result, &result_min, sizeof(int), cudaMemcpyHostToDevice);
+
+    min_reduction_kernel<<<(size + 255) / 256, 256>>>(d_arr, size, d_result);
+    cudaMemcpy(&result_min, d_result, sizeof(int), cudaMemcpyDeviceToHost);
+    std::cout << "Minimum value: " << result_min << std::endl;
+
+    cudaMemcpy(d_result, &result_max, sizeof(int), cudaMemcpyHostToDevice);
+    max_reduction_kernel<<<(size + 255) / 256, 256>>>(d_arr, size, d_result);
+    cudaMemcpy(&result_max, d_result, sizeof(int), cudaMemcpyDeviceToHost);
+    std::cout << "Maximum value: " << result_max << std::endl;
+
+    cudaMemcpy(d_result, &result_sum, sizeof(int), cudaMemcpyHostToDevice);
+    sum_reduction_kernel<<<(size + 255) / 256, 256>>>(d_arr, size, d_result);
+    cudaMemcpy(&result_sum, d_result, sizeof(int), cudaMemcpyDeviceToHost);
+    std::cout << "Sum: " << result_sum << std::endl;
+
+    cudaMemcpy(d_result, &result_sum, sizeof(int), cudaMemcpyHostToDevice);
+    average_reduction_kernel<<<(size + 255) / 256, 256>>>(d_arr, size, d_result);
+    cudaMemcpy(&result_sum, d_result, sizeof(int), cudaMemcpyDeviceToHost);
+    std::cout << "Average: " << static_cast<double>(result_sum) / size << std::endl;
+
+    cudaFree(d_arr);
+    cudaFree(d_result);
+
+    return 0;
+}
+
+
+!nvcc sum.cu -o sum
+!./sum
+
+
+
+
+
+
+
+
+
+
+-----------------------------------------------------------------------------------
+With the time printing
+-----------------------------------------------------------------------------------
+%%writefile sum.cu 
+#include <iostream>
+#include <vector>
+#include <climits>
+#include <cuda_runtime.h>
+
+__global__ void min_reduction_kernel(int* arr, int size, int* result) {
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid < size) {
+        atomicMin(result, arr[tid]);
+    }
+}
+
+__global__ void max_reduction_kernel(int* arr, int size, int* result) {
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid < size) {
+        atomicMax(result, arr[tid]);
+    }
+}
+
+__global__ void sum_reduction_kernel(int* arr, int size, int* result) {
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid < size) {
+        atomicAdd(result, arr[tid]);
+    }
+}
+
+__global__ void average_reduction_kernel(int* arr, int size, int* sum) {
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid < size) {
+        atomicAdd(sum, arr[tid]);
+    }
+}
+
+int main() {
+    int size;
+    std::cout << "Enter the size of the array: ";
+    std::cin >> size;
+
+    std::vector<int> arr(size);
+    std::cout << "Enter the elements of the array:\n";
+    for (int i = 0; i < size; ++i) {
+        std::cout << "Element " << i + 1 << ": ";
+        std::cin >> arr[i];
+    }
+
+    int* d_arr;
+    int* d_result;
+    int result_min = INT_MAX;
+    int result_max = INT_MIN;
+    int result_sum = 0;
+
+    cudaMalloc(&d_arr, size * sizeof(int));
+    cudaMalloc(&d_result, sizeof(int));
+
+    cudaMemcpy(d_arr, arr.data(), size * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_result, &result_min, sizeof(int), cudaMemcpyHostToDevice);
+
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    cudaEventRecord(start);
+    min_reduction_kernel<<<(size + 255) / 256, 256>>>(d_arr, size, d_result);
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    float min_kernel_time;
+    cudaEventElapsedTime(&min_kernel_time, start, stop);
+    std::cout << "Minimum kernel execution time: " << min_kernel_time << " milliseconds" << std::endl;
+
+    cudaMemcpy(&result_min, d_result, sizeof(int), cudaMemcpyDeviceToHost);
+    std::cout << "Minimum value: " << result_min << std::endl;
+
+    cudaMemcpy(d_result, &result_max, sizeof(int), cudaMemcpyHostToDevice);
+    max_reduction_kernel<<<(size + 255) / 256, 256>>>(d_arr, size, d_result);
+    cudaMemcpy(&result_max, d_result, sizeof(int), cudaMemcpyDeviceToHost);
+    std::cout << "Maximum value: " << result_max << std::endl;
+
+    cudaMemcpy(d_result, &result_sum, sizeof(int), cudaMemcpyHostToDevice);
+    sum_reduction_kernel<<<(size + 255) / 256, 256>>>(d_arr, size, d_result);
+    cudaMemcpy(&result_sum, d_result, sizeof(int), cudaMemcpyDeviceToHost);
+    std::cout << "Sum: " << result_sum << std::endl;
+
+    cudaMemcpy(d_result, &result_sum, sizeof(int), cudaMemcpyHostToDevice);
+    average_reduction_kernel<<<(size + 255) / 256, 256>>>(d_arr, size, d_result);
+    cudaMemcpy(&result_sum, d_result, sizeof(int), cudaMemcpyDeviceToHost);
+    std::cout << "Average: " << static_cast<double>(result_sum) / size << std::endl;
+
+    cudaFree(d_arr);
+    cudaFree(d_result);
+
+    return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+----------------------------------------------------------------------------------
+__global__ void min_reduction_kernel(int* arr, int size, int* result) {
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid < size) {
+        atomicMin(result, arr[tid]);
+    }
+}
+Explain this code
+
+ChatGPT
+Let's break down the provided CUDA kernel min_reduction_kernel line by line to understand its functionality:
+
+cpp
+Copy code
+__global__ void min_reduction_kernel(int* arr, int size, int* result) {
+__global__: Indicates that this is a CUDA kernel that will run on the GPU. This qualifier is crucial for defining functions that execute on the GPU and can access global memory.
+void: Specifies that the kernel does not return any value.
+min_reduction_kernel: Name of the CUDA kernel.
+(int* arr, int size, int* result): Parameters passed to the kernel.
+int* arr: Pointer to the input array.
+int size: Size of the input array.
+int* result: Pointer to store the minimum value found in the array.
+cpp
+Copy code
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+blockIdx.x: Index of the current block within the grid.
+blockDim.x: Number of threads per block.
+threadIdx.x: Index of the current thread within the block.
+The formula blockIdx.x * blockDim.x + threadIdx.x calculates a unique thread identifier (tid) within the entire grid. This identifier is used to determine which element of the array each thread will process.
+
+cpp
+Copy code
+    if (tid < size) {
+Checks if the thread identifier (tid) is within the valid range of array indices (0 to size - 1). This check ensures that threads do not access elements beyond the size of the array.
+
+cpp
+Copy code
+        atomicMin(result, arr[tid]);
+atomicMin(result, arr[tid]): Atomic operation that finds the minimum value across all threads. The atomicMin function ensures that concurrent threads do not interfere with each other when accessing and modifying the shared variable result.
+result: Pointer to the shared variable that stores the minimum value found in the array.
+arr[tid]: Accesses the array element corresponding to the thread's identifier tid.
+The atomicMin operation updates the value pointed to by result with the minimum value found among all elements processed by the threads. This ensures that the final result is accurate, even in the presence of concurrent updates from multiple threads.
+
+Overall, this CUDA kernel (min_reduction_kernel) uses parallelism to find the minimum value in an array by assigning each element to a separate thread and utilizing atomic operations to update the minimum value in a thread-safe manner.
+-----------------------------------------------------------------------------------------------------------------
+
+CUDA Library Inclusions and Global Variables:
+cpp
+Copy code
+#include <iostream>
+#include <vector>
+#include <climits>
+Here, you include necessary C++ libraries such as iostream for input/output, vector for managing arrays dynamically, and climits for using INT_MAX and INT_MIN constants.
+CUDA Kernels for Reduction Operations:
+cpp
+Copy code
+__global__ void min_reduction_kernel(int* arr, int size, int* result) { ... }
+__global__ void max_reduction_kernel(int* arr, int size, int* result) { ... }
+__global__ void sum_reduction_kernel(int* arr, int size, int* result) { ... }
+__global__ void average_reduction_kernel(int* arr, int size, int* sum) { ... }
+These are CUDA kernels designed for different reduction operations:
+min_reduction_kernel: Finds the minimum value in an array.
+max_reduction_kernel: Finds the maximum value in an array.
+sum_reduction_kernel: Calculates the sum of all elements in an array.
+average_reduction_kernel: Calculates the average of all elements in an array.
+Main Function:
+cpp
+Copy code
+int main() { ... }
+This is the main function where the CUDA code execution begins.
+Input Array Initialization:
+cpp
+Copy code
+std::cout << "Enter the size of the array: ";
+std::cin >> size;
+
+std::vector<int> arr(size);
+std::cout << "Enter the elements of the array:\n";
+for (int i = 0; i < size; ++i) {
+    std::cout << "Element " << i + 1 << ": ";
+    std::cin >> arr[i];
+}
+This segment prompts the user to input the size of the array and then input the elements of the array.
+CUDA Memory Allocation and Data Transfer:
+cpp
+Copy code
+int* d_arr;
+int* d_result;
+int result_min = INT_MAX;
+int result_max = INT_MIN;
+int result_sum = 0;
+
+cudaMalloc(&d_arr, size * sizeof(int));
+cudaMalloc(&d_result, sizeof(int));
+
+cudaMemcpy(d_arr, arr.data(), size * sizeof(int), cudaMemcpyHostToDevice);
+cudaMemcpy(d_result, &result_min, sizeof(int), cudaMemcpyHostToDevice);
+Here, CUDA device memory is allocated for the input array (d_arr) and the result variable (d_result). Data is then transferred from the host (CPU) to the device (GPU) using cudaMemcpy.
+Kernel Launch and Result Retrieval:
+cpp
+Copy code
+min_reduction_kernel<<<(size + 255) / 256, 256>>>(d_arr, size, d_result);
+cudaMemcpy(&result_min, d_result, sizeof(int), cudaMemcpyDeviceToHost);
+
+// Similar steps for other reduction operations
+CUDA kernels are launched to perform the reduction operations (minimum, maximum, sum, average), and the results are copied back from the device to the host for further processing.
+Output Results:
+cpp
+Copy code
+std::cout << "Minimum value: " << result_min << std::endl;
+// Output for other reduction operations
+Finally, the results of the reduction operations (minimum, maximum, sum, average) are printed to the console.
+CUDA Memory Deallocation:
+cpp
+Copy code
+cudaFree(d_arr);
+cudaFree(d_result);
+The allocated CUDA device memory is freed to avoid memory leaks.
+This code demonstrates how to use CUDA kernels for basic reduction operations on an array, showcasing the parallel processing capabilities of NVIDIA GPUs.

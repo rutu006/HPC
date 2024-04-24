@@ -1,0 +1,173 @@
+!pip install git+https://github.com/afnan47/cuda.git
+%load_ext nvcc_plugin
+
+
+%%writefile matrix_multi.cu
+
+#include <iostream>
+using namespace std;
+
+__global__
+void multiply(int* A, int* B, int* C, int size) {
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (row < size && col < size) {
+        int sum = 0;
+        for (int i = 0; i < size; i++) {
+            sum += A[row * size + i] * B[i * size + col];
+        }
+        C[row * size + col] = sum;
+    }
+}
+
+void print(int* matrix, int size) {
+    for (int row = 0; row < size; row++) {
+        for (int col = 0; col < size; col++) {
+            cout << matrix[row * size + col] << " ";
+        }
+        cout << '\n';
+    }
+    cout << '\n';
+}
+
+int main() {
+    int N;
+    cout << "Enter the size of matrices (N x N): ";
+    cin >> N;
+
+    int* A, * B, * C;
+
+    int matrixSize = N * N;
+    size_t matrixBytes = matrixSize * sizeof(int);
+
+    A = new int[matrixSize];
+    B = new int[matrixSize];
+    C = new int[matrixSize];
+
+    cout << "Enter elements of matrix A:" << endl;
+    for (int i = 0; i < matrixSize; i++) {
+        cout << "A[" << i / N << "][" << i % N << "]: ";
+        cin >> A[i];
+    }
+
+    cout << "Enter elements of matrix B:" << endl;
+    for (int i = 0; i < matrixSize; i++) {
+        cout << "B[" << i / N << "][" << i % N << "]: ";
+        cin >> B[i];
+    }
+
+    cout << "Matrix A: \n";
+    print(A, N);
+
+    cout << "Matrix B: \n";
+    print(B, N);
+
+    int* X, * Y, * Z;
+    cudaMalloc(&X, matrixBytes);
+    cudaMalloc(&Y, matrixBytes);
+    cudaMalloc(&Z, matrixBytes);
+
+    cudaMemcpy(X, A, matrixBytes, cudaMemcpyHostToDevice);
+    cudaMemcpy(Y, B, matrixBytes, cudaMemcpyHostToDevice);
+
+    int THREADS = 2;
+    int BLOCKS = N / THREADS;
+    dim3 threads(THREADS, THREADS);
+    dim3 blocks(BLOCKS, BLOCKS);
+
+    multiply<<<blocks, threads>>>(X, Y, Z, N);
+
+    cudaMemcpy(C, Z, matrixBytes, cudaMemcpyDeviceToHost);
+    cout << "Multiplication of matrices A and B: \n";
+    print(C, N);
+
+    delete[] A;
+    delete[] B;
+    delete[] C;
+
+    cudaFree(X);
+    cudaFree(Y);
+    cudaFree(Z);
+
+    return 0;
+}
+
+
+!nvcc matrix_multi.cu -o matrix_multi
+!./matrix_multi
+
+
+
+
+----------------------------------------------------------------------------------
+In CUDA programming, the __global__ qualifier is used to indicate a function that will run on the GPU and be callable from the CPU. This qualifier is specific to CUDA and is not part of standard C or C++.
+-----------------------------------------------------------------------------------
+CUDA Kernel for Matrix Multiplication
+cpp
+Copy code
+__global__
+void multiply(int* A, int* B, int* C, int size) {
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (row < size && col < size) {
+        int sum = 0;
+        for (int i = 0; i < size; i++) {
+            sum += A[row * size + i] * B[i * size + col];
+        }
+        C[row * size + col] = sum;
+    }
+}
+__global__ indicates that this function is a CUDA kernel, meaning it will be executed on the GPU.
+multiply is the name of the kernel function, taking pointers to three integer arrays (A, B, C) and an integer size as arguments.
+blockIdx.y * blockDim.y + threadIdx.y and blockIdx.x * blockDim.x + threadIdx.x calculate the row and column indices for each thread.
+The if block ensures that threads operate within the bounds of the matrices.
+The nested loop performs the actual matrix multiplication logic, computing the dot product of corresponding rows and columns and storing the result in matrix C.
+Utility Function for Matrix Printing
+cpp
+Copy code
+void print(int* matrix, int size) {
+    for (int row = 0; row < size; row++) {
+        for (int col = 0; col < size; col++) {
+            cout << matrix[row * size + col] << " ";
+        }
+        cout << '\n';
+    }
+    cout << '\n';
+}
+print is a utility function to print the elements of an integer matrix.
+It takes a pointer to an integer matrix (matrix) and the size of the matrix as arguments.
+The nested loops iterate over each element of the matrix and print it, formatting the output to display rows and columns properly.
+Main Function for Matrix Multiplication
+cpp
+Copy code
+int main() {
+    int N;
+    cout << "Enter the size of matrices (N x N): ";
+    cin >> N;
+
+    // Memory allocation for matrices A, B, and C
+    // User input for matrix elements
+    // CUDA memory allocation and data transfer
+
+    // Kernel launch configuration
+    int THREADS = 2;
+    int BLOCKS = N / THREADS;
+    dim3 threads(THREADS, THREADS);
+    dim3 blocks(BLOCKS, BLOCKS);
+
+    // Kernel launch for matrix multiplication
+    multiply<<<blocks, threads>>>(X, Y, Z, N);
+
+    // CUDA memory deallocation
+
+    return 0;
+}
+main is the entry point of the program for matrix multiplication.
+It prompts the user to enter the size of square matrices (N x N).
+Memory is allocated for matrices A, B, and C, and user input is taken to fill these matrices.
+CUDA memory allocation (cudaMalloc) and data transfer (cudaMemcpy) are performed to move matrices from host (CPU) to device (GPU).
+The kernel launch configuration determines the number of threads and blocks needed for the computation.
+The multiply kernel is launched on the GPU using <<<blocks, threads>>> syntax, passing the matrix pointers and size as arguments.
+After the kernel execution, CUDA memory is deallocated (cudaFree) to release resources

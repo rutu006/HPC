@@ -1,0 +1,175 @@
+# Check CUDA version
+!nvcc --version
+# Install CUDA package
+!pip install git+https://github.com/afnan47/cuda.git
+# Load nvcc plugin
+%load_ext nvcc_plugin 
+
+
+%%writefile vector_add.cu //This command starts a cell block and writes the following code to a file named vector_add.cu.
+// WARNING: DO NOT COPY THIS CODE, INSTEAD DOWNLOAD IT TO AVOID ERRORS.
+#include <iostream>
+using namespace std;
+
+__global__
+void add(int* A, int* B, int* C, int size) {
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (tid < size) {
+        C[tid] = A[tid] + B[tid];
+    }
+}
+
+void print(int* vector, int size) {
+    for (int i = 0; i < size; i++) {
+        cout << vector[i] << " ";
+    }
+    cout << endl;
+}
+
+int main() {
+    int N;
+    cout << "Enter the size of vectors (N): ";
+    cin >> N;
+
+    int* A, * B, * C;
+
+    A = new int[N];
+    B = new int[N];
+    C = new int[N];
+
+    cout << "Enter elements of vector A:" << endl;
+    for (int i = 0; i < N; i++) {
+        cout << "A[" << i << "]: ";
+        cin >> A[i];
+    }
+
+    cout << "Enter elements of vector B:" << endl;
+    for (int i = 0; i < N; i++) {
+        cout << "B[" << i << "]: ";
+        cin >> B[i];
+    }
+
+    cout << "Vector A: ";
+    print(A, N);
+    cout << "Vector B: ";
+    print(B, N);
+
+    int* X, * Y, * Z;
+    cudaMalloc(&X, N * sizeof(int));
+    cudaMalloc(&Y, N * sizeof(int));
+    cudaMalloc(&Z, N * sizeof(int));
+
+    cudaMemcpy(X, A, N * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(Y, B, N * sizeof(int), cudaMemcpyHostToDevice);
+
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+
+    add<<<blocksPerGrid, threadsPerBlock>>>(X, Y, Z, N);
+
+    cudaMemcpy(C, Z, N * sizeof(int), cudaMemcpyDeviceToHost);
+
+    cout << "Addition: ";
+    print(C, N);
+
+    delete[] A;
+    delete[] B;
+    delete[] C;
+
+    cudaFree(X);
+    cudaFree(Y);
+    cudaFree(Z);
+
+    return 0;
+}
+
+
+!nvcc vector_add.cu -o vector_add
+!./vector_add
+---------------------------------------------------------------------------------
+!nvcc vector_add.cu -o vector_add
+This line compiles the CUDA code (vector_add.cu) using nvcc (NVIDIA CUDA Compiler) and generates an executable named vector_add.
+
+python
+Copy code
+!./vector_add
+Finally, this line runs the compiled CUDA program (vector_add) to perform vector addition and display the result
+
+-----------------------------------------------------------------------------------------------
+Kernel Function for Vector Addition
+cpp
+Copy code
+__global__
+void add(int* A, int* B, int* C, int size) {
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (tid < size) {
+        C[tid] = A[tid] + B[tid];
+    }
+}
+__global__ indicates that this function is a CUDA kernel, meaning it will be executed on the GPU.
+add is the name of the kernel function, taking pointers to three integer arrays (A, B, C) and an integer size as arguments.
+blockIdx.x * blockDim.x + threadIdx.x calculates the unique thread ID within the grid.
+The if (tid < size) check ensures that only valid elements of the arrays are processed.
+Inside the if block, C[tid] = A[tid] + B[tid] performs the vector addition operation element-wise.
+Print Function
+cpp
+Copy code
+void print(int* vector, int size) {
+    for (int i = 0; i < size; i++) {
+        cout << vector[i] << " ";
+    }
+    cout << endl;
+}
+print is a utility function to print the elements of an integer array.
+It takes a pointer to an integer array (vector) and the size of the array as arguments.
+The for loop iterates over each element of the array and prints it, followed by a space.
+After printing all elements, cout << endl; adds a new line to the output.
+Main Function
+cpp
+Copy code
+int main() {
+    int N;
+    cout << "Enter the size of vectors (N): ";
+    cin >> N;
+
+    int* A, * B, * C;
+
+    A = new int[N];
+    B = new int[N];
+    C = new int[N];
+
+    // Code for inputting elements into A and B arrays omitted for brevity
+    
+    int* X, * Y, * Z;
+    cudaMalloc(&X, N * sizeof(int));
+    cudaMalloc(&Y, N * sizeof(int));
+    cudaMalloc(&Z, N * sizeof(int));
+
+    // Code for copying data from host to device omitted for brevity
+    
+    // Kernel launch configuration
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (N + threadsPerBlock - 1) / threadsPerBlock;
+
+    add<<<blocksPerGrid, threadsPerBlock>>>(X, Y, Z, N);
+
+    // Code for copying data from device to host omitted for brevity
+
+    // Code for printing the result omitted for brevity
+    
+    // Code for memory cleanup omitted for brevity
+    
+    return 0;
+}
+main is the entry point of the program.
+It first prompts the user to enter the size of the vectors (N).
+Dynamic memory allocation (new) is used to create arrays A, B, and C of size N to hold vector elements.
+User input code for filling A and B arrays is not shown here.
+cudaMalloc is used to allocate memory on the GPU for arrays X, Y, and Z.
+Data transfer code (cudaMemcpy) to move data from host to device and vice versa is not shown here.
+The kernel launch configuration determines how many threads are needed for the computation (threadsPerBlock and blocksPerGrid).
+The kernel function add is launched on the GPU with appropriate grid and block dimensions.
+Code for copying the result from the device to the host is not shown here.
+Code for printing the result and deallocating memory (delete[] and cudaFree) is not shown here.
