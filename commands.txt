@@ -1,0 +1,27 @@
+git clone https://github.com/Sandesh02/HPC
+
+sudo apt install git
+
+sudo apt install g++
+
+g++ filename.cpp -lgomp -o filename
+./filename
+
+
+***cuda*****
+
+%%writefile filename.cu
+
+%%script bash
+nvcc filename.cu -o sample
+
+!./sample
+
+********cuda install **********
+
+# Check CUDA version
+!nvcc --version
+# Install CUDA package
+!pip install git+https://github.com/afnan47/cuda.git
+# Load nvcc plugin
+%load_ext nvcc_plugin 
